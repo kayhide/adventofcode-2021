@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+
+set -eu
+
+AOC_URL="https://adventofcode.com/2021"
+HERE="$(cd $(dirname $0) >/dev/null; pwd)"
+
+die() {
+    if [[ -n ${1:-} ]]; then
+        >&2 echo "$1"
+    fi
+    exit 1
+}
+
+fetch-html() {
+    local day="${1:-}"
+    if [[ -z $day ]]; then
+        die "Day is missing"
+    fi
+
+    local url="$AOC_URL/day/$day"
+    local dst="day$(printf "%02d" $day).html"
+
+    curl -b "session=$SESSION" -L "$url" > "$dst"
+    echo "create $dst"
+}
+
+fetch-input() {
+    local dirname="$(basename $(pwd))"
+    if [[ ! $dirname =~ ^day0*([0-9]+) ]]; then
+        die "Not in a day directory"
+    fi
+    local day="${BASH_REMATCH[1]}"
+
+    local url="$AOC_URL/day/$day/input"
+    local dst="input.txt"
+
+    curl -sSL -b "session=$SESSION" "$url" > "$dst"
+    echo "ok"
+}
+
+dev() {
+    local day="${1:-}"
+    if [[ -z $day ]]; then
+        die "Day is missing"
+    fi
+
+    local mod="day$(printf "%02d" $day)"
+    mkdir -p "$mod"
+    cd "$mod"
+
+    local src="main.go"
+
+    if [[ ! -f "input.txt" ]]; then
+        fetch-input
+    fi
+
+    if [[ ! -f go.mod ]]; then
+        go mod init "aoc2021/$mod"
+    fi
+
+    if [[ ! -f $src ]]; then
+        cat <<EOF > "$src"
+package main
+
+import (
+	"fmt"
+	"io/ioutil"
+	"strconv"
+	"strings"
+)
+
+func main() {
+	input, _ := ioutil.ReadFile("input.txt")
+	// input, _ := ioutil.ReadFile("input-1.txt")
+	run1(string(input))
+	run2(string(input))
+}
+
+func run1(input string) {
+	lines := strings.Split(input, "\n")
+	res := 0
+	for i, line := range lines {
+		x, e := strconv.Atoi(line)
+		if e == nil {
+		}
+	}
+	fmt.Printf("%d\n", res)
+}
+
+func run2(input string) {
+	lines := strings.Split(input, "\n")
+	res := 0
+	last := 0
+	lasts := []int{}
+	for _, line := range lines {
+		x, e := strconv.Atoi(line)
+		if e == nil {
+		}
+	}
+	fmt.Printf("%d\n", res)
+}
+EOF
+    fi
+
+    find -name "*.go" | entr -cdr go run .
+}
+
+command="${1:-}"
+
+if [[ -z $command ]]; then
+    die "No argument"
+fi
+if ! type "$command" >/dev/null 2>&1; then
+    die "Command not found: $command"
+fi
+
+shift
+"$command" "$@"
