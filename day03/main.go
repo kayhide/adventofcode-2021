@@ -14,84 +14,80 @@ func main() {
 }
 
 func run1(input string) {
-	lines := strings.Split(input, "\n")
-	n := len(lines[0])
-	xs, ys := countBits(lines)
-	zs := make([]int, n)
-	for i := range zs {
-		if ys[i] < xs[i] {
-			zs[i] = 1
+	us, d := parseInput(input)
+	n := len(us)
+	// fmt.Println(us, n, d)
+
+	xs := countBits(us, d)
+	gamma := 0
+	epsilon := 0
+	for i, x := range xs {
+		if n-x <= x {
+			gamma += 1 << i
+		}
+		if x <= n-x {
+			epsilon += 1 << i
 		}
 	}
-	gamma := fromBin(zs)
-	epsilon := fromBin(negate(zs))
 	fmt.Printf("%d\n", gamma*epsilon)
 }
 
 func run2(input string) {
-	lines := strings.Split(input, "\n")
-	x := oxgen_generator(lines)
-	y := co2_scrubber(lines)
+	us, d := parseInput(input)
+	x := oxgen_generator(us, d)
+	y := co2_scrubber(us, d)
 	fmt.Printf("%d\n", x*y)
 }
 
-func oxgen_generator(lines []string) int {
-	for i := range lines[0] {
-		xs, ys := countBits(lines)
-		// fmt.Println(xs)
-		// fmt.Println(ys)
-		var n int
-		var b byte
-		if ys[i] <= xs[i] {
-			n = xs[i]
-			b = '1'
-		} else {
-			n = ys[i]
-			b = '0'
-		}
-
-		lines = filterLines(lines, i, b, n)
-		// fmt.Println(i, b, n)
-		// fmt.Println(lines)
-		if len(lines) == 1 {
-			break
+func parseInput(input string) ([]uint, int) {
+	res := []uint{}
+	n := 0
+	for _, line := range strings.Split(input, "\n") {
+		if 0 < len(line) {
+			n = len(line)
+			res = append(res, parseBits(line))
 		}
 	}
-	xs, _ := countBits(lines)
-	return fromBin(xs)
+	return res, n
 }
 
-func co2_scrubber(lines []string) int {
-	for i := range lines[0] {
-		xs, ys := countBits(lines)
-		// fmt.Println(xs)
-		// fmt.Println(ys)
-		var n int
-		var b byte
-		if ys[i] <= xs[i] {
-			n = ys[i]
-			b = '0'
+func oxgen_generator(us []uint, digits int) int {
+	for i := digits - 1; 1 < len(us); i-- {
+		count := len(us)
+		xs := countBits(us, digits)
+		// fmt.Println(us, xs)
+		if count-xs[i] <= xs[i] {
+			us = filterBits(us, i, 1, xs[i])
 		} else {
-			n = xs[i]
-			b = '1'
+			us = filterBits(us, i, 0, count-xs[i])
 		}
-
-		lines = filterLines(lines, i, b, n)
-		// fmt.Println(i, b, n)
-		// fmt.Println(lines)
-		if len(lines) == 1 {
-			break
-		}
+		// fmt.Println(i, b, n, us)
 	}
-	xs, _ := countBits(lines)
-	return fromBin(xs)
+	// fmt.Println(int(us[0]))
+	return int(us[0])
 }
 
-func filterLines(lines []string, pos int, bit byte, count int) []string {
-	res := []string{}
-	for _, line := range lines {
-		if line[pos] == bit {
-			res = append(res, line)
+func co2_scrubber(us []uint, digits int) int {
+	for i := digits - 1; 1 < len(us); i-- {
+		count := len(us)
+		xs := countBits(us, digits)
+		// fmt.Println(us, xs)
+		if count-xs[i] <= xs[i] {
+			us = filterBits(us, i, 0, count-xs[i])
+		} else {
+			us = filterBits(us, i, 1, xs[i])
+		}
+		// fmt.Println(i, b, n, us)
+	}
+	// fmt.Println(int(us[0]))
+	return int(us[0])
+}
+
+func filterBits(us []uint, pos int, bit uint, count int) []uint {
+	res := []uint{}
+	for _, u := range us {
+		if (u>>pos)&1 == bit {
+			res = append(res, u)
 		}
 		if len(res) == count {
 			return res
@@ -100,34 +96,26 @@ func filterLines(lines []string, pos int, bit byte, count int) []string {
 	return res
 }
 
-func countBits(lines []string) ([]int, []int) {
-	n := len(lines[0])
-	xs := make([]int, n)
-	ys := make([]int, n)
-	for _, line := range lines {
-		for i, x := range line {
-			if x == 49 {
-				xs[i]++
-			} else {
-				ys[i]++
-			}
+func parseBits(s string) uint {
+	var res uint = 0
+	for _, x := range s {
+		res = res << 1
+		if x == '1' {
+			res++
 		}
 	}
-	return xs, ys
-}
-
-func fromBin(xs []int) int {
-	res := 0
-	for _, x := range xs {
-		res = res*2 + x
-	}
 	return res
 }
 
-func negate(xs []int) []int {
-	res := make([]int, len(xs))
-	for i, x := range xs {
-		res[i] = -1 * (x - 1)
+func countBits(us []uint, digits int) []int {
+	xs := make([]int, digits)
+	for _, u := range us {
+		for i := range xs {
+			if u&1 == 1 {
+				xs[i]++
+			}
+			u = u >> 1
+		}
 	}
-	return res
+	return xs
 }
