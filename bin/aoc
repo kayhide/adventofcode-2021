@@ -103,7 +103,11 @@ func run2(input string) {
 EOF
     fi
 
-    find -name "*.go" | entr -cdr go run .
+    set +e
+    while true; do
+        find -name "*.go" | entr -cdr go run .
+        (( $? == 0 || $? > 128 )) && exit 0
+    done
 }
 
 command="${1:-}"
