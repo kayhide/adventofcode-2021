@@ -71,35 +71,34 @@ import (
 )
 
 func main() {
-	input, _ := ioutil.ReadFile("input.txt")
-	// input, _ := ioutil.ReadFile("input-1.txt")
+	// input, _ := ioutil.ReadFile("input.txt")
+	input, _ := ioutil.ReadFile("input-1.txt")
 	run1(string(input))
-	run2(string(input))
+	// run2(string(input))
 }
 
 func run1(input string) {
-	lines := strings.Split(input, "\n")
-	res := 0
-	for i, line := range lines {
-		x, e := strconv.Atoi(line)
-		if e == nil {
-		}
-	}
+    res := parse(input)
 	fmt.Printf("%d\n", res)
 }
 
 func run2(input string) {
+}
+
+type Res struct {
+}
+
+func parse(input string) Res {
 	lines := strings.Split(input, "\n")
 	res := 0
-	last := 0
-	lasts := []int{}
-	for _, line := range lines {
-		x, e := strconv.Atoi(line)
-		if e == nil {
+	for i, line := range lines {
+		if 0 < len(line) {
 		}
 	}
-	fmt.Printf("%d\n", res)
+	return Res{res}
 }
+
+
 EOF
     fi
 
