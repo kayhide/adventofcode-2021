@@ -22,9 +22,9 @@ func run1(input string) {
 		last := len(done)
 		for i, t := range scanners {
 			if _, b := done[i]; !b {
-				n, f := s0.match(&t)
-				if 12 <= n {
-					t.transform = f
+				c := s0.match(&t)
+				if 12 <= c.n {
+					t.transform = c.f
 					// t.display()
 					// s0.display()
 					s0.merge(&t)
@@ -54,12 +54,12 @@ func run2(input string) {
 		last := len(done)
 		for i, t := range scanners {
 			if _, b := done[i]; !b {
-				n, f := s0.match(&t)
-				if 12 <= n {
-					t.transform = f
+				c := s0.match(&t)
+				if 12 <= c.n {
+					t.transform = c.f
 					s0.merge(&t)
 					done[i] = true
-					poses[i] = f(Pos{0, 0, 0})
+					poses[i] = c.f(Pos{0, 0, 0})
 				}
 				// fmt.Println(i, n, len(s0.poses))
 				fmt.Print(".")
@@ -165,85 +165,89 @@ func (s *Scanner) merge(t *Scanner) {
 
 type Transform func(Pos) Pos
 
-func (s *Scanner) match(t *Scanner) (int, Transform) {
-	max := 1
-	var transform Transform
-	for _, t_ := range t.variations() {
-		n, f := s.countLappings(&t_)
-		if max < n {
-			max = n
-			transform = f
-		}
-	}
-	return max, transform
+type Count struct {
+	n int
+	f Transform
 }
 
-func (s *Scanner) countLappings(t *Scanner) (int, Transform) {
-	transform := t.transform
-	g := func(p Pos) Pos { return p }
-	max := 0
+func (s *Scanner) match(t *Scanner) Count {
+	ch := make(chan Count)
+	for _, f := range variations() {
+		go s.countLappings(t, f, ch)
+	}
+
+	max := Count{}
+	max.n = 1
+	for range variations() {
+		for range s.poses {
+			for range t.poses {
+				r := <-ch
+				if max.n < r.n {
+					max = r
+				}
+			}
+		}
+	}
+
+	return max
+}
+
+func (s *Scanner) countLappings(t *Scanner, f Transform, ch chan Count) {
 	for sp := range s.poses {
 		for tp := range t.poses {
-			// fmt.Print("*")
-			tp = transform(tp)
+			tp = f(tp)
 			v := Pos{sp.x - tp.x, sp.y - tp.y, sp.z - tp.z}
-			f := func(p Pos) Pos {
-				p = transform(p)
+			g := func(p Pos) Pos {
+				p = f(p)
 				return Pos{p.x + v.x, p.y + v.y, p.z + v.z}
 			}
-			n := countDups(s.poses, t.poses, f)
-			if max < n {
-				max = n
-				g = f
-			}
+			go countDups(s.poses, t.poses, g, ch)
 		}
 	}
-	return max, g
 }
 
-func countDups(ss map[Pos]int, ts map[Pos]int, f func(p Pos) Pos) int {
+func countDups(ss map[Pos]int, ts map[Pos]int, f Transform, ch chan Count) {
 	res := 0
 	for t, _ := range ts {
 		if _, b := ss[f(t)]; b {
 			res++
 		}
 	}
-	return res
+	ch <- Count{res, f}
 }
 
-func (s *Scanner) variations() []Scanner {
-	poses := s.poses
-	res := []Scanner{
-		Scanner{poses, func(p Pos) Pos { return p }},
-		Scanner{poses, func(p Pos) Pos { return Pos{p.y, p.z, p.x} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{p.z, p.x, p.y} }},
+func variations() []Transform {
+	res := []Transform{
+		func(p Pos) Pos { return p },
+		func(p Pos) Pos { return Pos{p.y, p.z, p.x} },
+		func(p Pos) Pos { return Pos{p.z, p.x, p.y} },
 
-		Scanner{poses, func(p Pos) Pos { return Pos{p.y, -p.x, p.z} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.x, p.z, p.y} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{p.z, p.y, -p.x} }},
+		func(p Pos) Pos { return Pos{p.y, -p.x, p.z} },
+		func(p Pos) Pos { return Pos{-p.x, p.z, p.y} },
+		func(p Pos) Pos { return Pos{p.z, p.y, -p.x} },
 
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.x, -p.y, p.z} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.y, p.z, -p.x} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{p.z, -p.x, -p.y} }},
+		func(p Pos) Pos { return Pos{-p.x, -p.y, p.z} },
+		func(p Pos) Pos { return Pos{-p.y, p.z, -p.x} },
+		func(p Pos) Pos { return Pos{p.z, -p.x, -p.y} },
 
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.y, p.x, p.z} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{p.x, p.z, -p.y} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{p.z, -p.y, p.x} }},
+		func(p Pos) Pos { return Pos{-p.y, p.x, p.z} },
+		func(p Pos) Pos { return Pos{p.x, p.z, -p.y} },
+		func(p Pos) Pos { return Pos{p.z, -p.y, p.x} },
 
-		Scanner{poses, func(p Pos) Pos { return Pos{p.y, p.x, -p.z} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{p.x, -p.z, p.y} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.z, p.y, p.x} }},
+		func(p Pos) Pos { return Pos{p.y, p.x, -p.z} },
+		func(p Pos) Pos { return Pos{p.x, -p.z, p.y} },
+		func(p Pos) Pos { return Pos{-p.z, p.y, p.x} },
 
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.x, p.y, -p.z} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{p.y, -p.z, -p.x} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.z, -p.x, p.y} }},
+		func(p Pos) Pos { return Pos{-p.x, p.y, -p.z} },
+		func(p Pos) Pos { return Pos{p.y, -p.z, -p.x} },
+		func(p Pos) Pos { return Pos{-p.z, -p.x, p.y} },
 
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.y, -p.x, -p.z} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.x, -p.z, -p.y} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.z, -p.y, -p.x} }},
+		func(p Pos) Pos { return Pos{-p.y, -p.x, -p.z} },
+		func(p Pos) Pos { return Pos{-p.x, -p.z, -p.y} },
+		func(p Pos) Pos { return Pos{-p.z, -p.y, -p.x} },
 
-		Scanner{poses, func(p Pos) Pos { return Pos{p.x, -p.y, -p.z} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.y, -p.z, p.x} }},
-		Scanner{poses, func(p Pos) Pos { return Pos{-p.z, p.x, -p.y} }}}
+		func(p Pos) Pos { return Pos{p.x, -p.y, -p.z} },
+		func(p Pos) Pos { return Pos{-p.y, -p.z, p.x} },
+		func(p Pos) Pos { return Pos{-p.z, p.x, -p.y} }}
 	return res
 }
