@@ -36,68 +36,43 @@ func run1(input string) {
 
 func run2(input string) {
 	steps := parse(input)
-	state := []Step{steps[0]}
-	for _, step := range steps[1:] {
+	state := map[Cuboid]int{}
+	for _, step := range steps {
 		// fmt.Println(i+1, len(steps), len(state), step)
-		next := []Step{}
+		next := map[Cuboid]int{}
 		if step.on {
-			next = append(next, step)
+			next[step.cuboid] = 1
 		}
-		for _, t := range state {
-			c := step.cuboid.intersect(t.cuboid)
-			// fmt.Println(" ", c.volume())
+		for t, x := range state {
+			c := step.cuboid.intersect(t)
 			if 0 < c.volume() {
-				if t.on {
-					next = append(next, Step{false, c})
-				} else {
-					next = append(next, Step{true, c})
+				if _, b := next[c]; !b {
+					next[c] = 0
 				}
+				next[c] += -x
 			}
 		}
-		// state = append(state, next...)
 		state = merge(state, next)
 	}
 
 	sum := 0
-	for _, s := range state {
-		// fmt.Println(s)
-		if s.on {
-			sum += s.cuboid.volume()
-		} else {
-			sum -= s.cuboid.volume()
-
-		}
+	for c, v := range state {
+		sum += c.volume() * v
 	}
 	fmt.Println(sum)
 }
 
-func merge(a, b []Step) []Step {
-	xs := map[Cuboid]int{}
-	for _, s := range append(a, b...) {
-		if _, b := xs[s.cuboid]; !b {
-			xs[s.cuboid] = 0
+func merge(xs, ys map[Cuboid]int) map[Cuboid]int {
+	for c, v := range ys {
+		if _, b := xs[c]; !b {
+			xs[c] = 0
 		}
-		if s.on {
-			xs[s.cuboid]++
-		} else {
-			xs[s.cuboid]--
+		xs[c] += v
+		if xs[c] == 0 {
+			delete(xs, c)
 		}
 	}
-	// fmt.Println(xs)
-	res := []Step{}
-	for c, n := range xs {
-		if 0 < n {
-			for i := 0; i < n; i++ {
-				res = append(res, Step{true, c})
-			}
-		} else if n < 0 {
-			for i := 0; i < -n; i++ {
-				res = append(res, Step{false, c})
-			}
-
-		}
-	}
-	return res
+	return xs
 }
 
 type Field struct {
