@@ -10,12 +10,7 @@ func main() {
 	input, _ := ioutil.ReadFile("input.txt")
 	// input, _ := ioutil.ReadFile("input-1.txt")
 	run1(string(input))
-	// To run the second part, update Layout type statically.
-	// Use 
-	// type Layout [15 + 8]Amph
-	// instead of
-	// type Layout [15]Amph
-	// run2(string(input))
+	run2(string(input))
 }
 
 func run1(input string) {
@@ -90,11 +85,15 @@ func (a Amph) destination() int {
 
 type CostMap map[Layout]int
 
-type Layout [15]Amph
+// type Layout [15]Amph
 // type Layout [15 + 8]Amph
+type Layout struct {
+	size  int
+	amphs [15 + 8]Amph
+}
 
 func (l Layout) depth() int {
-	return (len(l)-3)/4 - 1
+	return (l.size-3)/4 - 1
 }
 
 func (l Layout) explore(cost int) CostMap {
@@ -115,7 +114,6 @@ func (l Layout) step() CostMap {
 		next := l
 		c := next.move(i, j)
 		res[next] = c
-		// next.display()
 		return res
 	}
 	for i := 0; i < 11; i++ {
@@ -123,7 +121,6 @@ func (l Layout) step() CostMap {
 			if l.reachable(i, j) {
 				next := l
 				c := next.move(i, j)
-				// fmt.Println(i, "->", j, c)
 				res[next] = c
 			}
 		}
@@ -134,7 +131,7 @@ func (l Layout) step() CostMap {
 func (l Layout) findFixable() (src, dst int, b bool) {
 	for i := 0; i < 11; i++ {
 		if l.any(i) {
-			j := l.head(i).destination()
+			j := l.top(i).destination()
 			if l.reachable(i, j) {
 				src, dst, b = i, j, true
 				return
@@ -146,19 +143,9 @@ func (l Layout) findFixable() (src, dst int, b bool) {
 }
 
 func (l Layout) done() bool {
-	for i := 0; i < 11; i++ {
-		if l.hall(i) {
-			if l.any(i) {
-				return false
-			}
-		} else {
-			if !l.full(i) {
-				return false
-			}
-			if !l.fixed(i) {
-				return false
-			}
-
+	for _, i := range []int{2, 4, 6, 8} {
+		if !l.full(i) || !l.fixed(i) {
+			return false
 		}
 	}
 	return true
@@ -170,7 +157,7 @@ func (l Layout) cost(src, dst int) int {
 		steps = -steps
 	}
 
-	amph := l.head(src)
+	amph := l.top(src)
 	if l.room(src) {
 		steps++
 		for _, a := range l.get(src) {
@@ -206,7 +193,7 @@ func (l Layout) reachable(src, dst int) bool {
 		return false
 	}
 	if l.room(dst) {
-		if l.head(src).destination() != dst {
+		if l.top(src).destination() != dst {
 			return false
 		}
 		if !l.empty(dst) && !l.fixed(dst) {
@@ -260,7 +247,7 @@ func (l *Layout) push(i int, a Amph) {
 	l.put(i, as)
 }
 
-func (l *Layout) head(i int) Amph {
+func (l *Layout) top(i int) Amph {
 	amph := Amph(0)
 	for _, a := range l.get(i) {
 		if !a.empty() {
@@ -283,17 +270,17 @@ func (l Layout) get(i int) []Amph {
 	res := []Amph{}
 	d := l.depth()
 	if i < 2 {
-		res = append(res, l[i])
+		res = append(res, l.amphs[i])
 	} else if i < 9 {
 		j := 2 + (d+1)*((i-2)/2)
 		if l.hall(i) {
-			res = append(res, l[j+d])
+			res = append(res, l.amphs[j+d])
 		} else {
-			res = append(res, l[j:j+d]...)
+			res = append(res, l.amphs[j:j+d]...)
 		}
 	} else {
 		j := i + (d-1)*4
-		res = append(res, l[j])
+		res = append(res, l.amphs[j])
 	}
 	return res
 }
@@ -301,19 +288,19 @@ func (l Layout) get(i int) []Amph {
 func (l *Layout) put(i int, as []Amph) {
 	d := l.depth()
 	if i < 2 {
-		l[i] = as[0]
+		l.amphs[i] = as[0]
 	} else if i < 9 {
 		j := 2 + (d+1)*((i-2)/2)
 		if l.hall(i) {
-			l[j+d] = as[0]
+			l.amphs[j+d] = as[0]
 		} else {
 			for k := 0; k < d; k++ {
-				l[j+k] = as[k]
+				l.amphs[j+k] = as[k]
 			}
 		}
 	} else {
 		j := i + (d-1)*4
-		l[j] = as[0]
+		l.amphs[j] = as[0]
 	}
 
 }
@@ -381,9 +368,11 @@ func (l Layout) display() {
 
 func parse(input string) Layout {
 	lines := strings.Split(input, "\n")
+	lines = lines[2:4]
 	layout := Layout{}
-	for j := 0; j < layout.depth(); j++ {
-		line := lines[3-j]
+	layout.size = 7 + 4*len(lines)
+	for j := 0; j < len(lines); j++ {
+		line := lines[len(lines)-j-1]
 		for i := 0; i < 4; i++ {
 			layout.push(i*2+2, Amph(rune(line[i*2+3])))
 		}
@@ -398,10 +387,9 @@ func parse2(input string) Layout {
 		"  #D#B#A#C#"}
 	lines = append(lines[2:3], extra[0], extra[1], lines[3])
 	layout := Layout{}
-	fmt.Println(lines)
-	fmt.Println(layout.depth())
+	layout.size = 7 + 4*len(lines)
 	for j := 0; j < len(lines); j++ {
-		line := lines[len(lines) - j - 1]
+		line := lines[len(lines)-j-1]
 		for i := 0; i < 4; i++ {
 			layout.push(i*2+2, Amph(rune(line[i*2+3])))
 		}
