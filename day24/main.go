@@ -15,37 +15,44 @@ func main() {
 }
 
 func run1(input string) {
-	insts := parse(input)
-	blocks := toBlocks(insts)
-
+	blocks := parse(input)
 	runner := Runner{}
 	runner.init(blocks)
-
-	res, _ := runner.descend([]int{}, Alu{})
-	fmt.Println("")
-	for _, n := range res {
-		fmt.Print(n)
+	is := make([]int, 9)
+	for i := 0; i < 9; i++ {
+		is[i] = 9 - i
 	}
+	runner.nexts = is
+
+	ch := make(chan string)
+	go runner.explore("", Alu{}, ch)
+
+	res := <-ch
 	fmt.Println("")
+	fmt.Println(res)
 }
 
 func run2(input string) {
-	insts := parse(input)
-	blocks := toBlocks(insts)
-
+	blocks := parse(input)
 	runner := Runner{}
 	runner.init(blocks)
-
-	res, _ := runner.ascend([]int{}, Alu{})
-	fmt.Println("")
-	for _, n := range res {
-		fmt.Print(n)
+	is := make([]int, 9)
+	for i := 0; i < 9; i++ {
+		is[i] = i + 1
 	}
+	runner.nexts = is
+
+	ch := make(chan string)
+	go runner.explore("", Alu{}, ch)
+
+	res := <-ch
 	fmt.Println("")
+	fmt.Println(res)
 }
 
 type Runner struct {
 	blocks []Block
+	nexts  []int
 	cache  map[CacheEntry]bool
 }
 
@@ -61,11 +68,12 @@ func (r *Runner) init(blocks []Block) {
 }
 
 func (r *Runner) exec(ix, input int, a Alu) Alu {
+	if 10000000 < len(r.cache) {
+		fmt.Println("*")
+		r.cache = map[CacheEntry]bool{}
+	}
 	if len(r.cache)%100000 == 0 {
 		fmt.Print(".")
-	}
-	if 100000000 < len(r.cache) {
-		r.cache = map[CacheEntry]bool{}
 	}
 	r.cache[toCacheEntry(ix, input, a)] = true
 	return r.blocks[ix].exec(input, a)
@@ -76,42 +84,25 @@ func (r *Runner) visited(ix, input int, a Alu) bool {
 	return b
 }
 
-func (r *Runner) descend(inputs []int, a Alu) ([]int, bool) {
+func (r *Runner) explore(inputs string, a Alu, ch chan string) bool {
 	ix := len(inputs)
-	if ix == 14 {
-		// fmt.Println(inputs, len(r.cache), a)
-		return inputs, a[2] == 0
+	if ix == len(r.blocks) {
+		if a[2] == 0 {
+			ch <- inputs
+			return true
+		}
+		return false
 	}
 
-	for i := 9; 0 < i; i-- {
+	for _, i := range r.nexts {
 		if !r.visited(ix, i, a) {
 			a1 := r.exec(ix, i, a)
-			ns, b := r.descend(append([]int{}, append(inputs, i)...), a1)
-			if b {
-				return ns, true
+			if r.explore(fmt.Sprintf("%s%d", inputs, i), a1, ch) {
+				return true
 			}
 		}
 	}
-	return nil, false
-}
-
-func (r *Runner) ascend(inputs []int, a Alu) ([]int, bool) {
-	ix := len(inputs)
-	if ix == 14 {
-		// fmt.Println(inputs, len(r.cache), a)
-		return inputs, a[2] == 0
-	}
-
-	for i := 1; i <= 9; i++ {
-		if !r.visited(ix, i, a) {
-			a1 := r.exec(ix, i, a)
-			ns, b := r.ascend(append([]int{}, append(inputs, i)...), a1)
-			if b {
-				return ns, true
-			}
-		}
-	}
-	return nil, false
+	return false
 }
 
 func (block Block) exec(i int, a Alu) Alu {
@@ -125,40 +116,6 @@ func (block Block) exec(i int, a Alu) Alu {
 	return a
 }
 
-func toBlocks(insts []Inst) []Block {
-	res := []Block{}
-	block := Block{}
-	for ix, inst := range insts {
-		switch i := inst.(type) {
-		case Inp:
-			if 0 < len(block.ops) {
-				res = append(res, block)
-				block = Block{}
-				block.ix = ix
-				block.ops = []Op{}
-			}
-			block.inp = i
-		case Op:
-			block.ops = append(block.ops, i)
-
-		}
-	}
-	res = append(res, block)
-	return res
-}
-
-func toInput(n int) ([]int, bool) {
-	res := make([]int, 14)
-	for i := 0; i < 14; i++ {
-		if n%10 == 0 {
-			return res, false
-		}
-		res[13-i] = n % 10
-		n = n / 10
-	}
-	return res, true
-}
-
 type Alu [4]int
 
 type Block struct {
@@ -167,56 +124,64 @@ type Block struct {
 	ops []Op
 }
 
-type Inst interface {
-	show()
+func (block Block) empty() bool {
+	return block.inp.f == nil
 }
 
 type Inp struct {
-	line string
+	line []string
 	f    func(int, Alu) Alu
 }
 
-func (i Inp) show() {
-	fmt.Println(i.line)
-}
-
 type Op struct {
-	line string
+	line []string
 	f    func(Alu) Alu
 }
 
-func (i Op) show() {
-	fmt.Println(i.line)
-}
-
-func parse(input string) []Inst {
+func parse(input string) []Block {
 	lines := strings.Split(input, "\n")
-	res := []Inst{}
+	res := []Block{}
+	var block *Block
 	for _, line := range lines {
 		if 0 < len(line) {
-			res = append(res, parseInst(line))
+			ss := strings.Split(line, " ")
+			if inp, ok := parseInp(ss); ok {
+				if block != nil {
+					res = append(res, *block)
+				}
+				block = &Block{len(res), inp, []Op{}}
+			} else {
+				op := parseOp(ss)
+				block.ops = append(block.ops, op)
+			}
 		}
 	}
+	res = append(res, *block)
 	return res
 }
 
-func parseInst(s string) Inst {
-	ss := strings.Split(s, " ")
+func parseInp(ss []string) (Inp, bool) {
 	switch ss[0] {
 	case "inp":
 		i := toIdx(ss[1])
 		return Inp{
-			s,
+			ss,
 			func(n int, a Alu) Alu {
 				res := a
 				res[i] = n
 				return res
-			}}
+			}}, true
+	}
+	return Inp{}, false
+}
+
+func parseOp(ss []string) Op {
+	switch ss[0] {
 	case "add":
 		a := toIdx(ss[1])
 		if b, err := strconv.Atoi(ss[2]); err == nil {
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					alu[a] = alu[a] + b
 					return alu
@@ -224,7 +189,7 @@ func parseInst(s string) Inst {
 		} else {
 			b := toIdx(ss[2])
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					alu[a] = alu[a] + alu[b]
 					return alu
@@ -235,7 +200,7 @@ func parseInst(s string) Inst {
 		a := toIdx(ss[1])
 		if b, err := strconv.Atoi(ss[2]); err == nil {
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					alu[a] = alu[a] * b
 					return alu
@@ -243,7 +208,7 @@ func parseInst(s string) Inst {
 		} else {
 			b := toIdx(ss[2])
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					alu[a] = alu[a] * alu[b]
 					return alu
@@ -254,7 +219,7 @@ func parseInst(s string) Inst {
 		a := toIdx(ss[1])
 		if b, err := strconv.Atoi(ss[2]); err == nil {
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					alu[a] = alu[a] / b
 					return alu
@@ -262,7 +227,7 @@ func parseInst(s string) Inst {
 		} else {
 			b := toIdx(ss[2])
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					alu[a] = alu[a] / alu[b]
 					return alu
@@ -273,7 +238,7 @@ func parseInst(s string) Inst {
 		a := toIdx(ss[1])
 		if b, err := strconv.Atoi(ss[2]); err == nil {
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					alu[a] = alu[a] % b
 					return alu
@@ -281,7 +246,7 @@ func parseInst(s string) Inst {
 		} else {
 			b := toIdx(ss[2])
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					alu[a] = alu[a] % alu[b]
 					return alu
@@ -292,7 +257,7 @@ func parseInst(s string) Inst {
 		a := toIdx(ss[1])
 		if b, err := strconv.Atoi(ss[2]); err == nil {
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					if alu[a] == b {
 						alu[a] = 1
@@ -304,7 +269,7 @@ func parseInst(s string) Inst {
 		} else {
 			b := toIdx(ss[2])
 			return Op{
-				s,
+				ss,
 				func(alu Alu) Alu {
 					if alu[a] == alu[b] {
 						alu[a] = 1
